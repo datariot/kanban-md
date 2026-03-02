@@ -164,3 +164,74 @@ func TestBoardCompactOutput(t *testing.T) {
 		t.Fatalf("board --compact failed (exit %d): %s", r.exitCode, r.stderr)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Board --parent tests
+// ---------------------------------------------------------------------------
+
+func TestBoardParentFilter(t *testing.T) {
+	kanbanDir := initBoard(t)
+	mustCreateTask(t, kanbanDir, "Parent task")
+	mustCreateTask(t, kanbanDir, "Child A", "--parent", "1")
+	mustCreateTask(t, kanbanDir, "Child B", "--parent", "1")
+	mustCreateTask(t, kanbanDir, "Orphan")
+
+	// Move one child to todo.
+	runKanban(t, kanbanDir, "--json", "move", "3", statusTodo)
+
+	var summary struct {
+		TotalTasks int `json:"total_tasks"`
+		Statuses   []struct {
+			Status string `json:"status"`
+			Count  int    `json:"count"`
+		} `json:"statuses"`
+	}
+	r := runKanbanJSON(t, kanbanDir, &summary, "board", "--parent", "1")
+	if r.exitCode != 0 {
+		t.Fatalf("board --parent failed: %s", r.stderr)
+	}
+
+	// Should only include 2 children, not the parent or orphan.
+	if summary.TotalTasks != 2 {
+		t.Errorf("TotalTasks = %d, want 2", summary.TotalTasks)
+	}
+
+	statusCounts := make(map[string]int)
+	for _, ss := range summary.Statuses {
+		statusCounts[ss.Status] = ss.Count
+	}
+	if statusCounts["backlog"] != 1 {
+		t.Errorf("backlog = %d, want 1", statusCounts["backlog"])
+	}
+	if statusCounts[statusTodo] != 1 {
+		t.Errorf("todo = %d, want 1", statusCounts[statusTodo])
+	}
+}
+
+func TestBoardParentFilterTable(t *testing.T) {
+	kanbanDir := initBoard(t)
+	mustCreateTask(t, kanbanDir, "Parent task")
+	mustCreateTask(t, kanbanDir, "Child A", "--parent", "1")
+
+	r := runKanban(t, kanbanDir, "--table", "board", "--parent", "1")
+	if r.exitCode != 0 {
+		t.Fatalf("board --parent table failed: %s", r.stderr)
+	}
+	if !strings.Contains(r.stdout, "1 tasks") {
+		t.Errorf("expected 1 task in output:\n%s", r.stdout)
+	}
+}
+
+func TestBoardParentFilterCompact(t *testing.T) {
+	kanbanDir := initBoard(t)
+	mustCreateTask(t, kanbanDir, "Parent task")
+	mustCreateTask(t, kanbanDir, "Child A", "--parent", "1")
+
+	r := runKanban(t, kanbanDir, "--compact", "board", "--parent", "1")
+	if r.exitCode != 0 {
+		t.Fatalf("board --parent compact failed: %s", r.stderr)
+	}
+	if !strings.Contains(r.stdout, "1 tasks") {
+		t.Errorf("expected 1 task in output:\n%s", r.stdout)
+	}
+}

@@ -39,6 +39,7 @@ func init() {
 	rootCmd.AddCommand(boardCmd)
 	boardCmd.Flags().BoolVarP(&flagWatch, "watch", "w", false, "live-update the board on file changes")
 	boardCmd.Flags().String("group-by", "", "group board by field ("+strings.Join(board.ValidGroupByFields(), ", ")+")")
+	boardCmd.Flags().Int("parent", 0, "filter board to children of a parent task ID")
 }
 
 func runBoard(cmd *cobra.Command, _ []string) error {
@@ -53,8 +54,14 @@ func runBoard(cmd *cobra.Command, _ []string) error {
 			groupBy, strings.Join(board.ValidGroupByFields(), ", "))
 	}
 
+	var parentID *int
+	if cmd.Flags().Changed("parent") {
+		v, _ := cmd.Flags().GetInt("parent")
+		parentID = &v
+	}
+
 	// Render once.
-	if err := renderBoard(cfg, groupBy); err != nil {
+	if err := renderBoard(cfg, groupBy, parentID); err != nil {
 		return err
 	}
 
@@ -62,10 +69,10 @@ func runBoard(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return watchBoard(cfg, groupBy)
+	return watchBoard(cfg, groupBy, parentID)
 }
 
-func renderBoard(cfg *config.Config, groupBy string) error {
+func renderBoard(cfg *config.Config, groupBy string, parentID *int) error {
 	tasks, warnings, err := task.ReadAllLenient(cfg.TasksPath())
 	if err != nil {
 		return err
@@ -81,6 +88,17 @@ func renderBoard(cfg *config.Config, groupBy string) error {
 		if !cfg.IsArchivedStatus(t.Status) {
 			activeTasks = append(activeTasks, t)
 		}
+	}
+
+	// Filter to children of a parent task.
+	if parentID != nil {
+		var filtered []*task.Task
+		for _, t := range activeTasks {
+			if t.Parent != nil && *t.Parent == *parentID {
+				filtered = append(filtered, t)
+			}
+		}
+		activeTasks = filtered
 	}
 
 	if groupBy != "" {
@@ -113,7 +131,7 @@ func renderGroupedBoard(cfg *config.Config, tasks []*task.Task, groupBy string) 
 	return nil
 }
 
-func watchBoard(cfg *config.Config, groupBy string) error {
+func watchBoard(cfg *config.Config, groupBy string, parentID *int) error {
 	// Watch both the tasks directory and the config file's directory.
 	watchPaths := []string{cfg.TasksPath(), cfg.Dir()}
 
@@ -128,7 +146,7 @@ func watchBoard(cfg *config.Config, groupBy string) error {
 			fmt.Fprintf(os.Stderr, "Warning: reloading config: %v\n", loadErr)
 			freshCfg = cfg
 		}
-		if renderErr := renderBoard(freshCfg, groupBy); renderErr != nil {
+		if renderErr := renderBoard(freshCfg, groupBy, parentID); renderErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: rendering board: %v\n", renderErr)
 		}
 	})

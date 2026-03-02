@@ -130,3 +130,70 @@ func TestMetricsWithBadSince(t *testing.T) {
 		t.Errorf("error code = %q, want %q", errResp.Code, codeInvalidDate)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Metrics --parent tests
+// ---------------------------------------------------------------------------
+
+func TestMetricsParentFilter(t *testing.T) {
+	kanbanDir := initBoard(t)
+	mustCreateTask(t, kanbanDir, "Parent task")
+	mustCreateTask(t, kanbanDir, "Child A", "--parent", "1")
+	mustCreateTask(t, kanbanDir, "Child B", "--parent", "1")
+	mustCreateTask(t, kanbanDir, "Orphan")
+
+	// Complete child A and orphan.
+	runKanban(t, kanbanDir, "--json", "move", "2", "in-progress", "--claim", claimTestAgent)
+	runKanban(t, kanbanDir, "--json", "move", "2", "done", "--claim", claimTestAgent)
+	runKanban(t, kanbanDir, "--json", "move", "4", "in-progress", "--claim", claimTestAgent)
+	runKanban(t, kanbanDir, "--json", "move", "4", "done", "--claim", claimTestAgent)
+
+	// Without --parent: throughput includes both completed tasks.
+	var all struct {
+		Throughput7d int `json:"throughput_7d"`
+	}
+	runKanbanJSON(t, kanbanDir, &all, "metrics")
+	if all.Throughput7d != 2 {
+		t.Errorf("unfiltered Throughput7d = %d, want 2", all.Throughput7d)
+	}
+
+	// With --parent 1: throughput includes only child A.
+	var scoped struct {
+		Throughput7d int `json:"throughput_7d"`
+	}
+	r := runKanbanJSON(t, kanbanDir, &scoped, "metrics", "--parent", "1")
+	if r.exitCode != 0 {
+		t.Fatalf("metrics --parent failed: %s", r.stderr)
+	}
+	if scoped.Throughput7d != 1 {
+		t.Errorf("scoped Throughput7d = %d, want 1", scoped.Throughput7d)
+	}
+}
+
+func TestMetricsParentFilterAgingItems(t *testing.T) {
+	kanbanDir := initBoard(t)
+	mustCreateTask(t, kanbanDir, "Parent task")
+	mustCreateTask(t, kanbanDir, "Child A", "--parent", "1")
+	mustCreateTask(t, kanbanDir, "Orphan in progress")
+
+	// Start both child A and orphan but don't complete them.
+	runKanban(t, kanbanDir, "--json", "move", "2", "in-progress", "--claim", claimTestAgent)
+	runKanban(t, kanbanDir, "--json", "move", "3", "in-progress", "--claim", claimTestAgent)
+
+	// With --parent 1: aging items should only include child A.
+	var m struct {
+		AgingItems []struct {
+			ID int `json:"id"`
+		} `json:"aging_items"`
+	}
+	r := runKanbanJSON(t, kanbanDir, &m, "metrics", "--parent", "1")
+	if r.exitCode != 0 {
+		t.Fatalf("metrics --parent aging failed: %s", r.stderr)
+	}
+	if len(m.AgingItems) != 1 {
+		t.Fatalf("aging items = %d, want 1", len(m.AgingItems))
+	}
+	if m.AgingItems[0].ID != 2 {
+		t.Errorf("aging item ID = %d, want 2", m.AgingItems[0].ID)
+	}
+}

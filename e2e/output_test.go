@@ -231,9 +231,10 @@ func TestREADMEDocumentsAllCommands(t *testing.T) {
 		},
 		"move":    {"--claim"},
 		"list":    {"--blocked", "--not-blocked", "--parent", "--unblocked", "--unclaimed", "--claimed-by", "--class", "--group-by"},
-		"board":   {"--group-by"},
+		"show":    {"--children"},
+		"board":   {"--group-by", "--parent"},
 		"pick":    {"--claim", "--status", "--move", "--tags", "--no-body"},
-		"metrics": {"--since"},
+		"metrics": {"--since", "--parent"},
 		"log":     {"--since", "--limit", "--action", "--task"},
 	}
 	for cmd, flags := range requiredFlags {

@@ -277,7 +277,16 @@ Show full details of a task.
 
 ```bash
 kanban-md show ID
+kanban-md show ID --children            # parent + all children status summary
+kanban-md show ID --children --compact   # one-line-per-child format
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--children` | Show parent task with all children's status summary |
+| `--section` | Extract a specific named section from the body |
+| `--prompt` | Token-efficient output for LLM prompts |
+| `--fields` | Fields to include in `--prompt` output (comma-separated) |
 
 ### `edit`
 
@@ -382,13 +391,15 @@ Show a board summary with task counts per status, WIP utilization, blocked/overd
 
 ```bash
 kanban-md board
-kanban-md board --watch    # live-update on file changes
+kanban-md board --watch       # live-update on file changes
+kanban-md board --parent 42   # board filtered to one parent's children
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-w`, `--watch` | false | Live-update the board on file changes (Ctrl+C to stop) |
 | `--group-by` | | Group by field (assignee, tag, class, priority, status) |
+| `--parent` | | Filter board to children of a parent task ID |
 
 ### `pick`
 
@@ -430,11 +441,13 @@ Show flow metrics: throughput, average lead/cycle time, flow efficiency, and agi
 
 ```bash
 kanban-md metrics [--since YYYY-MM-DD]
+kanban-md metrics --parent 42   # metrics scoped to one parent's children
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--since` | | Only include tasks completed after this date |
+| `--parent` | | Scope metrics to children of a parent task ID |
 
 ### `log`
 
