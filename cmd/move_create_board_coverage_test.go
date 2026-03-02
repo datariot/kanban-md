@@ -302,7 +302,7 @@ func TestRenderBoard_ReadAllError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(tasksDir, 0o750) }) //nolint:gosec // restoring
 
-	err = renderBoard(cfg, "")
+	err = renderBoard(cfg, "", nil)
 	if err == nil {
 		t.Fatal("expected error from unreadable tasks directory")
 	}
@@ -399,7 +399,7 @@ func TestRenderBoard_WithWarnings(t *testing.T) {
 	r, w := captureStdout(t)
 	rErr, wErr := captureStderr(t)
 
-	renderErr := renderBoard(cfg, "")
+	renderErr := renderBoard(cfg, "", nil)
 
 	_ = drainPipe(t, r, w)
 	stderr := drainPipe(t, rErr, wErr)
@@ -418,7 +418,7 @@ func TestWatchBoard_InvalidPath(t *testing.T) {
 	cfg := config.NewDefault("Test")
 	cfg.SetDir(filepath.Join(t.TempDir(), "nonexistent"))
 
-	err := watchBoard(cfg, "")
+	err := watchBoard(cfg, "", nil)
 	if err == nil {
 		t.Fatal("expected error from invalid watch path")
 	}
