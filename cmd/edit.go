@@ -51,6 +51,8 @@ func init() {
 	editCmd.Flags().String("claim", "", "claim task for an agent")
 	editCmd.Flags().Bool("release", false, "release claim on task")
 	editCmd.Flags().String("class", "", "set class of service")
+	editCmd.Flags().String("set-section", "", "create or replace a named section in the body")
+	editCmd.Flags().String("section-body", "", "content for the section specified by --set-section")
 	rootCmd.AddCommand(editCmd)
 }
 
@@ -259,6 +261,7 @@ func applyEditFlags(cmd *cobra.Command, t *task.Task, cfg *config.Config) (bool,
 
 	// Apply grouped flag helpers, each returning (bool, error).
 	for _, fn := range []func(*cobra.Command, *task.Task) (bool, error){
+		applyBodyFlags,
 		applyTimestampFlags,
 		applyTagDueFlags,
 		applyDepFlags,
@@ -303,22 +306,6 @@ func applySimpleEditFlags(cmd *cobra.Command, t *task.Task, cfg *config.Config) 
 	}
 	if v, _ := cmd.Flags().GetString("estimate"); v != "" {
 		t.Estimate = v
-		changed = true
-	}
-	bodySet := cmd.Flags().Changed("body")
-	appendSet := cmd.Flags().Changed("append-body")
-	if bodySet && appendSet {
-		return false, clierr.New(clierr.StatusConflict, "cannot use --body and --append-body together")
-	}
-	if bodySet {
-		v, _ := cmd.Flags().GetString("body")
-		t.Body = v
-		changed = true
-	}
-	if appendSet {
-		v, _ := cmd.Flags().GetString("append-body")
-		ts, _ := cmd.Flags().GetBool("timestamp")
-		t.Body = appendBody(t.Body, v, ts)
 		changed = true
 	}
 	if v, _ := cmd.Flags().GetString("class"); v != "" {
@@ -515,6 +502,45 @@ func removeAll(slice []string, items ...string) []string {
 		}
 	}
 	return result
+}
+
+func applyBodyFlags(cmd *cobra.Command, t *task.Task) (bool, error) {
+	bodySet := cmd.Flags().Changed("body")
+	appendSet := cmd.Flags().Changed("append-body")
+	sectionSet := cmd.Flags().Changed("set-section")
+
+	if bodySet && appendSet {
+		return false, clierr.New(clierr.StatusConflict, "cannot use --body and --append-body together")
+	}
+	if bodySet && sectionSet {
+		return false, clierr.New(clierr.StatusConflict, "cannot use --body and --set-section together")
+	}
+	if appendSet && sectionSet {
+		return false, clierr.New(clierr.StatusConflict, "cannot use --append-body and --set-section together")
+	}
+
+	if bodySet {
+		v, _ := cmd.Flags().GetString("body")
+		t.Body = v
+		return true, nil
+	}
+	if appendSet {
+		v, _ := cmd.Flags().GetString("append-body")
+		ts, _ := cmd.Flags().GetBool("timestamp")
+		t.Body = appendBody(t.Body, v, ts)
+		return true, nil
+	}
+	if sectionSet {
+		sectionName, _ := cmd.Flags().GetString("set-section")
+		if sectionName == "" {
+			return false, clierr.New(clierr.InvalidInput, "section name is required (use --set-section NAME)")
+		}
+		sectionBody, _ := cmd.Flags().GetString("section-body")
+		t.Body = task.SetSection(t.Body, sectionName, sectionBody)
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // appendBody appends text to the existing body, optionally prefixed with a timestamp line.

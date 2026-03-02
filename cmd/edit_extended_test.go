@@ -42,6 +42,8 @@ func newEditCmd() *cobra.Command {
 	cmd.Flags().String("claim", "", "")
 	cmd.Flags().Bool("release", false, "")
 	cmd.Flags().String("class", "", "")
+	cmd.Flags().String("set-section", "", "")
+	cmd.Flags().String("section-body", "", "")
 	return cmd
 }
 
@@ -149,13 +151,12 @@ func TestApplySimpleEditFlags_Estimate(t *testing.T) {
 	}
 }
 
-func TestApplySimpleEditFlags_Body(t *testing.T) {
+func TestApplyBodyFlags_Body(t *testing.T) {
 	cmd := newEditCmd()
 	_ = cmd.Flags().Set("body", "new body text")
-	cfg := config.NewDefault("Test")
 	tk := &task.Task{}
 
-	changed, err := applySimpleEditFlags(cmd, tk, cfg)
+	changed, err := applyBodyFlags(cmd, tk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,13 +168,12 @@ func TestApplySimpleEditFlags_Body(t *testing.T) {
 	}
 }
 
-func TestApplySimpleEditFlags_AppendBody_ToEmpty(t *testing.T) {
+func TestApplyBodyFlags_AppendBody_ToEmpty(t *testing.T) {
 	cmd := newEditCmd()
 	_ = cmd.Flags().Set("append-body", "first note")
-	cfg := config.NewDefault("Test")
 	tk := &task.Task{}
 
-	changed, err := applySimpleEditFlags(cmd, tk, cfg)
+	changed, err := applyBodyFlags(cmd, tk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,13 +185,12 @@ func TestApplySimpleEditFlags_AppendBody_ToEmpty(t *testing.T) {
 	}
 }
 
-func TestApplySimpleEditFlags_AppendBody_ToExisting(t *testing.T) {
+func TestApplyBodyFlags_AppendBody_ToExisting(t *testing.T) {
 	cmd := newEditCmd()
 	_ = cmd.Flags().Set("append-body", "second note")
-	cfg := config.NewDefault("Test")
 	tk := &task.Task{Body: "existing body"}
 
-	changed, err := applySimpleEditFlags(cmd, tk, cfg)
+	changed, err := applyBodyFlags(cmd, tk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,13 +203,12 @@ func TestApplySimpleEditFlags_AppendBody_ToExisting(t *testing.T) {
 	}
 }
 
-func TestApplySimpleEditFlags_AppendBody_ToExistingWithTrailingNewlines(t *testing.T) {
+func TestApplyBodyFlags_AppendBody_ToExistingWithTrailingNewlines(t *testing.T) {
 	cmd := newEditCmd()
 	_ = cmd.Flags().Set("append-body", "second note")
-	cfg := config.NewDefault("Test")
 	tk := &task.Task{Body: "existing body\n\n"}
 
-	changed, err := applySimpleEditFlags(cmd, tk, cfg)
+	changed, err := applyBodyFlags(cmd, tk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,14 +221,13 @@ func TestApplySimpleEditFlags_AppendBody_ToExistingWithTrailingNewlines(t *testi
 	}
 }
 
-func TestApplySimpleEditFlags_AppendBody_WithTimestamp(t *testing.T) {
+func TestApplyBodyFlags_AppendBody_WithTimestamp(t *testing.T) {
 	cmd := newEditCmd()
 	_ = cmd.Flags().Set("append-body", "progress update")
 	_ = cmd.Flags().Set("timestamp", "true")
-	cfg := config.NewDefault("Test")
 	tk := &task.Task{Body: "existing"}
 
-	changed, err := applySimpleEditFlags(cmd, tk, cfg)
+	changed, err := applyBodyFlags(cmd, tk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,16 +243,61 @@ func TestApplySimpleEditFlags_AppendBody_WithTimestamp(t *testing.T) {
 	}
 }
 
-func TestApplySimpleEditFlags_BodyAndAppendConflict(t *testing.T) {
+func TestApplyBodyFlags_BodyAndAppendConflict(t *testing.T) {
 	cmd := newEditCmd()
 	_ = cmd.Flags().Set("body", "replace")
 	_ = cmd.Flags().Set("append-body", "append")
-	cfg := config.NewDefault("Test")
 	tk := &task.Task{}
 
-	_, err := applySimpleEditFlags(cmd, tk, cfg)
+	_, err := applyBodyFlags(cmd, tk)
 	if err == nil {
 		t.Fatal("expected error for --body + --append-body conflict")
+	}
+}
+
+func TestApplyBodyFlags_SetSection(t *testing.T) {
+	cmd := newEditCmd()
+	_ = cmd.Flags().Set("set-section", "Artifact")
+	_ = cmd.Flags().Set("section-body", "Result: success")
+	tk := &task.Task{}
+
+	changed, err := applyBodyFlags(cmd, tk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Error("expected changed=true")
+	}
+	if !containsSubstring(tk.Body, "## Artifact") {
+		t.Errorf("body should contain section heading, got %q", tk.Body)
+	}
+	if !containsSubstring(tk.Body, "Result: success") {
+		t.Errorf("body should contain section content, got %q", tk.Body)
+	}
+}
+
+func TestApplyBodyFlags_SetSectionAndBodyConflict(t *testing.T) {
+	cmd := newEditCmd()
+	_ = cmd.Flags().Set("body", "replace")
+	_ = cmd.Flags().Set("set-section", "Notes")
+	_ = cmd.Flags().Set("section-body", "content")
+	tk := &task.Task{}
+
+	_, err := applyBodyFlags(cmd, tk)
+	if err == nil {
+		t.Fatal("expected error for --body + --set-section conflict")
+	}
+}
+
+func TestApplyBodyFlags_EmptySectionName(t *testing.T) {
+	cmd := newEditCmd()
+	_ = cmd.Flags().Set("set-section", "")
+	_ = cmd.Flags().Set("section-body", "content")
+	tk := &task.Task{}
+
+	_, err := applyBodyFlags(cmd, tk)
+	if err == nil {
+		t.Fatal("expected error for empty section name")
 	}
 }
 
